@@ -1,133 +1,194 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import Swal from 'sweetalert2';
 
 const Settings = () => {
-    // --- STATE ---
-    const [profileData, setProfileData] = useState({ name: '', email: '' });
-    const [passwordData, setPasswordData] = useState({ oldPassword: '', newPassword: '', confirmPassword: '' });
-    const [isProfileLoading, setIsProfileLoading] = useState(false);
-    const [isPasswordLoading, setIsPasswordLoading] = useState(false);
+    // --- STATE CHO THÔNG TIN CÁ NHÂN ---
+    const [profile, setProfile] = useState({
+        fullName: '',
+        email: ''
+    });
 
-    // --- DATA FETCHING ---
+    // --- STATE CHO ĐỔI MẬT KHẨU ---
+    const [passwords, setPasswords] = useState({
+        oldPassword: '',
+        newPassword: '',
+        confirmPassword: ''
+    });
+
+    const [isLoading, setIsLoading] = useState(false);
+
+    // 1. Load thông tin khi vào trang
     useEffect(() => {
-        const fetchProfile = async () => {
-            try {
-                const response = await axios.get('http://localhost:8080/api/auth/profile');
-                if (response.data) {
-                    setProfileData({
-                        name: response.data.name,
-                        email: response.data.email
-                    });
-                }
-            } catch (error) {
-                console.error("Lỗi tải thông tin cá nhân:", error);
-                Swal.fire('Lỗi', 'Không thể tải thông tin cá nhân.', 'error');
-            }
-        };
-        fetchProfile();
+        loadProfile();
     }, []);
 
-    // --- HANDLERS ---
-    const handleProfileChange = (e) => {
-        setProfileData({ ...profileData, [e.target.name]: e.target.value });
-    };
-
-    const handlePasswordChange = (e) => {
-        setPasswordData({ ...passwordData, [e.target.name]: e.target.value });
-    };
-
-    const handleProfileSubmit = async (e) => {
-        e.preventDefault();
-        setIsProfileLoading(true);
+    const loadProfile = async () => {
         try {
-            await axios.put('http://localhost:8080/api/auth/profile', profileData);
-            Swal.fire('Thành công', 'Thông tin cá nhân đã được cập nhật.', 'success');
-        } catch (error) {
-            Swal.fire('Lỗi', error.response?.data?.message || 'Không thể cập nhật thông tin.', 'error');
-        } finally {
-            setIsProfileLoading(false);
-        }
-    };
-
-    const handlePasswordSubmit = async (e) => {
-        e.preventDefault();
-        if (passwordData.newPassword !== passwordData.confirmPassword) {
-            Swal.fire('Lỗi', 'Mật khẩu mới không khớp.', 'warning');
-            return;
-        }
-        setIsPasswordLoading(true);
-        try {
-            await axios.put('http://localhost:8080/api/auth/password', {
-                oldPassword: passwordData.oldPassword,
-                newPassword: passwordData.newPassword
+            // Gọi API lấy thông tin mới nhất
+            const res = await axios.get('/api/Auth/profile');
+            setProfile({
+                fullName: res.data.fullName || '',
+                email: res.data.email || ''
             });
-            Swal.fire('Thành công', 'Mật khẩu đã được thay đổi.', 'success');
-            setPasswordData({ oldPassword: '', newPassword: '', confirmPassword: '' }); // Reset fields
-        } catch (error) {
-            Swal.fire('Lỗi', error.response?.data?.message || 'Không thể thay đổi mật khẩu.', 'error');
+        } catch (err) {
+            console.error("Lỗi load profile:", err);
+            // Nếu lỗi thì lấy tạm từ localStorage
+            const stored = JSON.parse(localStorage.getItem('user'));
+            if (stored) {
+                setProfile({ fullName: stored.fullName || '', email: stored.email || '' });
+            }
+        }
+    };
+
+    // 2. Xử lý Cập nhật thông tin (Tên)
+    const handleUpdateProfile = async () => {
+        if (!profile.fullName.trim()) return alert("Tên không được để trống!");
+        
+        setIsLoading(true);
+        try {
+            const res = await axios.put('/api/Auth/update-profile', {
+                fullName: profile.fullName
+            });
+            
+            alert("✅ " + res.data.message);
+            
+            // Cập nhật lại localStorage để Sidebar hiển thị đúng tên mới ngay lập tức
+            const currentUser = JSON.parse(localStorage.getItem('user')) || {};
+            currentUser.fullName = profile.fullName;
+            localStorage.setItem('user', JSON.stringify(currentUser));
+            
+            // Reload trang để Sidebar cập nhật (hoặc dùng Context nếu muốn mượt hơn)
+            window.location.reload(); 
+
+        } catch (err) {
+            alert("❌ Lỗi: " + (err.response?.data || err.message));
         } finally {
-            setIsPasswordLoading(false);
+            setIsLoading(false);
+        }
+    };
+
+    // 3. Xử lý Đổi mật khẩu
+    const handleChangePassword = async () => {
+        const { oldPassword, newPassword, confirmPassword } = passwords;
+
+        if (!oldPassword || !newPassword || !confirmPassword) {
+            return alert("Vui lòng nhập đầy đủ các trường mật khẩu!");
+        }
+        if (newPassword !== confirmPassword) {
+            return alert("Mật khẩu mới không khớp!");
+        }
+        if (newPassword.length < 6) {
+            return alert("Mật khẩu mới phải có ít nhất 6 ký tự!");
+        }
+
+        setIsLoading(true);
+        try {
+            const res = await axios.post('/api/Auth/change-password', {
+                oldPassword: oldPassword,
+                newPassword: newPassword
+            });
+
+            alert("✅ " + res.data.message);
+            // Reset form mật khẩu
+            setPasswords({ oldPassword: '', newPassword: '', confirmPassword: '' });
+
+        } catch (err) {
+            alert("❌ Lỗi: " + (err.response?.data || err.message));
+        } finally {
+            setIsLoading(false);
         }
     };
 
     return (
-        <div className="container-fluid">
-            {/* 1. Header */}
-            <header className="mb-4">
-                <h2 className="fw-bold mb-0">Cài đặt Tài khoản</h2>
-                <p className="text-muted">Quản lý thông tin cá nhân và bảo mật của bạn.</p>
-            </header>
-
+        <div className="container-fluid py-4" style={{ backgroundColor: '#f8f9fa', minHeight: '100vh' }}>
+            <h2 className="fw-bold mb-2 text-dark">Cài đặt Tài khoản</h2>
+            <p className="text-muted mb-4">Quản lý thông tin cá nhân và bảo mật của bạn.</p>
+            
             <div className="row g-4">
-                {/* --- LEFT COLUMN: PERSONAL INFO --- */}
+                {/* --- CỘT TRÁI: THÔNG TIN CÁ NHÂN --- */}
                 <div className="col-lg-6">
-                    <div className="card h-100 rounded-4 shadow-sm border-0">
+                    <div className="card border-0 shadow-sm rounded-4 h-100">
                         <div className="card-header bg-white border-0 pt-4 px-4">
-                            <h5 className="fw-bold mb-0">Thông tin cá nhân</h5>
+                            <h5 className="fw-bold text-dark">Thông tin cá nhân</h5>
                         </div>
                         <div className="card-body p-4">
-                            <form onSubmit={handleProfileSubmit}>
-                                <div className="form-floating mb-3">
-                                    <input type="text" className="form-control rounded-3" id="name" name="name" placeholder="Họ và tên" value={profileData.name} onChange={handleProfileChange} />
-                                    <label htmlFor="name">Họ và tên</label>
-                                </div>
-                                <div className="form-floating mb-3">
-                                    <input type="email" className="form-control rounded-3" id="email" name="email" placeholder="Email" value={profileData.email} onChange={handleProfileChange} readOnly disabled />
-                                    <label htmlFor="email">Địa chỉ Email (Không thể thay đổi)</label>
-                                </div>
-                                <button type="submit" className="btn btn-primary bg-gradient-primary border-0 rounded-pill px-4" disabled={isProfileLoading}>
-                                    {isProfileLoading ? 'Đang lưu...' : 'Lưu thay đổi'}
-                                </button>
-                            </form>
+                            <div className="mb-3">
+                                <label className="form-label fw-bold text-secondary small">Họ và tên</label>
+                                <input 
+                                    type="text" 
+                                    className="form-control bg-light" 
+                                    value={profile.fullName} 
+                                    onChange={(e) => setProfile({...profile, fullName: e.target.value})}
+                                    placeholder="Nhập tên hiển thị..." 
+                                />
+                            </div>
+
+                            <div className="mb-4">
+                                <label className="form-label fw-bold text-secondary small">Địa chỉ Email (Không thể thay đổi)</label>
+                                <input 
+                                    type="text" 
+                                    className="form-control" 
+                                    value={profile.email} 
+                                    disabled 
+                                    style={{backgroundColor: '#e9ecef', cursor: 'not-allowed'}} 
+                                />
+                            </div>
+
+                            <button 
+                                className="btn btn-primary fw-bold px-4 rounded-pill shadow-sm"
+                                onClick={handleUpdateProfile}
+                                disabled={isLoading}
+                                style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', border: 'none' }}
+                            >
+                                {isLoading ? 'Đang lưu...' : 'Lưu thay đổi'}
+                            </button>
                         </div>
                     </div>
                 </div>
 
-                {/* --- RIGHT COLUMN: CHANGE PASSWORD --- */}
+                {/* --- CỘT PHẢI: ĐỔI MẬT KHẨU --- */}
                 <div className="col-lg-6">
-                     <div className="card h-100 rounded-4 shadow-sm border-0">
+                    <div className="card border-0 shadow-sm rounded-4 h-100">
                         <div className="card-header bg-white border-0 pt-4 px-4">
-                            <h5 className="fw-bold mb-0">Thay đổi mật khẩu</h5>
+                            <h5 className="fw-bold text-dark">Thay đổi mật khẩu</h5>
                         </div>
                         <div className="card-body p-4">
-                             <form onSubmit={handlePasswordSubmit}>
-                                <div className="form-floating mb-3">
-                                    <input type="password" name="oldPassword" className="form-control rounded-3" id="oldPassword" placeholder="Mật khẩu cũ" value={passwordData.oldPassword} onChange={handlePasswordChange} required />
-                                    <label htmlFor="oldPassword">Mật khẩu cũ</label>
-                                </div>
-                                <div className="form-floating mb-3">
-                                    <input type="password" name="newPassword" className="form-control rounded-3" id="newPassword" placeholder="Mật khẩu mới" value={passwordData.newPassword} onChange={handlePasswordChange} required />
-                                    <label htmlFor="newPassword">Mật khẩu mới</label>
-                                </div>
-                                 <div className="form-floating mb-3">
-                                    <input type="password" name="confirmPassword" className="form-control rounded-3" id="confirmPassword" placeholder="Xác nhận mật khẩu" value={passwordData.confirmPassword} onChange={handlePasswordChange} required />
-                                    <label htmlFor="confirmPassword">Xác nhận mật khẩu mới</label>
-                                </div>
-                                <button type="submit" className="btn btn-primary bg-gradient-primary border-0 rounded-pill px-4" disabled={isPasswordLoading}>
-                                    {isPasswordLoading ? 'Đang lưu...' : 'Đổi mật khẩu'}
-                                </button>
-                            </form>
+                            <div className="mb-3">
+                                <label className="form-label fw-bold text-secondary small">Mật khẩu cũ</label>
+                                <input 
+                                    type="password" 
+                                    className="form-control bg-light" 
+                                    value={passwords.oldPassword}
+                                    onChange={(e) => setPasswords({...passwords, oldPassword: e.target.value})}
+                                />
+                            </div>
+                            <div className="mb-3">
+                                <label className="form-label fw-bold text-secondary small">Mật khẩu mới</label>
+                                <input 
+                                    type="password" 
+                                    className="form-control bg-light" 
+                                    value={passwords.newPassword}
+                                    onChange={(e) => setPasswords({...passwords, newPassword: e.target.value})}
+                                />
+                            </div>
+                            <div className="mb-4">
+                                <label className="form-label fw-bold text-secondary small">Xác nhận mật khẩu mới</label>
+                                <input 
+                                    type="password" 
+                                    className="form-control bg-light" 
+                                    value={passwords.confirmPassword}
+                                    onChange={(e) => setPasswords({...passwords, confirmPassword: e.target.value})}
+                                />
+                            </div>
+
+                            <button 
+                                className="btn btn-warning text-white fw-bold px-4 rounded-pill shadow-sm"
+                                onClick={handleChangePassword}
+                                disabled={isLoading}
+                                style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', border: 'none' }}
+                            >
+                                {isLoading ? 'Đang xử lý...' : 'Đổi mật khẩu'}
+                            </button>
                         </div>
                     </div>
                 </div>

@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Authorization; // 👈 QUAN TRỌNG: Dòng này sửa lỗi [Authorize]
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -32,7 +32,6 @@ namespace FinanceJarApp.Server.Controllers
                 return BadRequest("Email này đã tồn tại.");
             }
 
-            // Mã hóa mật khẩu
             string passwordHash = BCrypt.Net.BCrypt.HashPassword(request.Password);
 
             var newUser = new User
@@ -60,17 +59,16 @@ namespace FinanceJarApp.Server.Controllers
                 return BadRequest("Email hoặc mật khẩu không đúng.");
             }
 
-            // Tạo Token
             string token = CreateToken(user);
-            return Ok(new { token = token, username = user.Username, userId = user.Id });
+            // Trả về cả FullName để hiển thị
+            return Ok(new { token = token, username = user.Username, fullName = user.FullName, email = user.Email });
         }
 
-        // --- LẤY THÔNG TIN USER (PROFILE) ---
+        // --- LẤY THÔNG TIN (PROFILE) ---
         [HttpGet("profile")]
-        [Authorize] // 🔒 Yêu cầu phải có Token
+        [Authorize]
         public async Task<IActionResult> GetProfile()
         {
-            // Lấy ID từ Token
             var idClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
             if (string.IsNullOrEmpty(idClaim)) return Unauthorized();
 
@@ -78,14 +76,7 @@ namespace FinanceJarApp.Server.Controllers
 
             var user = await _context.Users
                 .Where(u => u.Id == userId)
-                .Select(u => new 
-                { 
-                    u.Id, 
-                    u.Username, 
-                    u.Email, 
-                    u.FullName, 
-                    u.CreatedAt 
-                })
+                .Select(u => new { u.Id, u.Username, u.Email, u.FullName, u.CreatedAt })
                 .FirstOrDefaultAsync();
 
             if (user == null) return NotFound("User không tồn tại");
@@ -93,7 +84,51 @@ namespace FinanceJarApp.Server.Controllers
             return Ok(user);
         }
 
-        // Helper: Tạo JWT Token
+        // 👇👇👇 1. API CẬP NHẬT THÔNG TIN CÁ NHÂN (MỚI) 👇👇👇
+        [HttpPut("update-profile")]
+        [Authorize]
+        public async Task<IActionResult> UpdateProfile(UpdateProfileDto request)
+        {
+            var idClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (string.IsNullOrEmpty(idClaim)) return Unauthorized();
+            int userId = int.Parse(idClaim);
+
+            var user = await _context.Users.FindAsync(userId);
+            if (user == null) return NotFound();
+
+            // Cập nhật tên
+            user.FullName = request.FullName;
+            
+            await _context.SaveChangesAsync();
+            return Ok(new { message = "Cập nhật thành công!", fullName = user.FullName });
+        }
+
+        // 👇👇👇 2. API ĐỔI MẬT KHẨU (MỚI) 👇👇👇
+        [HttpPost("change-password")]
+        [Authorize]
+        public async Task<IActionResult> ChangePassword(ChangePasswordDto request)
+        {
+            var idClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (string.IsNullOrEmpty(idClaim)) return Unauthorized();
+            int userId = int.Parse(idClaim);
+
+            var user = await _context.Users.FindAsync(userId);
+            if (user == null) return NotFound();
+
+            // Kiểm tra mật khẩu cũ
+            if (!BCrypt.Net.BCrypt.Verify(request.OldPassword, user.PasswordHash))
+            {
+                return BadRequest("Mật khẩu cũ không đúng.");
+            }
+
+            // Mã hóa và lưu mật khẩu mới
+            user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.NewPassword);
+            
+            await _context.SaveChangesAsync();
+            return Ok(new { message = "Đổi mật khẩu thành công!" });
+        }
+
+        // Helper: Tạo Token
         private string CreateToken(User user)
         {
             List<Claim> claims = new List<Claim>
@@ -103,14 +138,14 @@ namespace FinanceJarApp.Server.Controllers
                 new Claim(ClaimTypes.Email, user.Email)
             };
 
-            var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_config["Jwt:Key"]));
+            var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_config["Jwt:Key"] ?? ""));
             var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256Signature);
 
             var token = new JwtSecurityToken(
                 issuer: _config["Jwt:Issuer"],
                 audience: _config["Jwt:Audience"],
                 claims: claims,
-                expires: DateTime.Now.AddDays(7), // Token sống 7 ngày
+                expires: DateTime.Now.AddDays(7),
                 signingCredentials: creds
             );
 
@@ -118,7 +153,7 @@ namespace FinanceJarApp.Server.Controllers
         }
     }
 
-    // DTOs
+    // --- DTOs ---
     public class RegisterDto
     {
         public string Username { get; set; }
@@ -130,5 +165,17 @@ namespace FinanceJarApp.Server.Controllers
     {
         public string Email { get; set; }
         public string Password { get; set; }
+    }
+
+    // 👇 DTO MỚI CHO CẬP NHẬT
+    public class UpdateProfileDto
+    {
+        public string FullName { get; set; }
+    }
+
+    public class ChangePasswordDto
+    {
+        public string OldPassword { get; set; }
+        public string NewPassword { get; set; }
     }
 }

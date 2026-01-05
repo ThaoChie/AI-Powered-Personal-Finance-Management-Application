@@ -203,3 +203,4 @@
 /Users/thaochie/Documents/FinanceJarApp/Server/obj/Debug/net9.0/Server.pdb
 /Users/thaochie/Documents/FinanceJarApp/Server/obj/Debug/net9.0/Server.genruntimeconfig.cache
 /Users/thaochie/Documents/FinanceJarApp/Server/obj/Debug/net9.0/ref/Server.dll
+/Users/thaochie/Documents/FinanceJarApp/Server/obj/Debug/net9.0/Server.sourcelink.json
