@@ -1,0 +1,11 @@
+# Bỏ qua rác của Backend (.NET)
+**/bin/
+**/obj/
+**/.vs/
+**/.vscode/
+
+# Bỏ qua rác của Frontend (React)
+**/node_modules/
+**/dist/
+**/build/
+.DS_Store
