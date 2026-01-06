@@ -6,16 +6,16 @@ namespace FinanceJarApp.Server.Services
     public class QdrantService
     {
         private readonly QdrantClient _client;
-        private const string COLLECTION_NAME = "finance_knowledge"; // Tên bộ não
-        private const ulong VECTOR_SIZE = 768; // Kích thước Vector của Gemini 004
+        private const string COLLECTION_NAME = "finance_knowledge"; 
+        private const ulong VECTOR_SIZE = 768; 
 
         public QdrantService()
         {
-            // Kết nối đến Docker Qdrant
-            _client = new QdrantClient("localhost", 6334); 
+            string host = Environment.GetEnvironmentVariable("QDRANT_HOST") ?? "localhost";
+            
+            _client = new QdrantClient(host, 6334, https: false); 
         }
 
-        // 1. Khởi tạo bộ nhớ (Chạy 1 lần đầu)
         public async Task InitializeAsync()
         {
             var collections = await _client.ListCollectionsAsync();
@@ -25,7 +25,6 @@ namespace FinanceJarApp.Server.Services
             }
         }
 
-        // 2. Học kiến thức mới (Lưu vào Vector DB)
         public async Task SaveMemoryAsync(string text, float[] vector)
         {
             var point = new PointStruct
@@ -33,7 +32,7 @@ namespace FinanceJarApp.Server.Services
                 Id = Guid.NewGuid(),
                 Vectors = vector,
                 Payload = { 
-                    ["content"] = text // Lưu lại nội dung gốc để sau này đọc
+                    ["content"] = text 
                 }
             };
 
@@ -46,13 +45,12 @@ namespace FinanceJarApp.Server.Services
             var results = await _client.SearchAsync(
                 COLLECTION_NAME, 
                 queryVector, 
-                limit: 3 // Chỉ lấy 3 thông tin liên quan nhất
+                limit: 3 
             );
 
             var memories = new List<string>();
             foreach (var point in results)
             {
-                // Chỉ lấy tin nếu độ tương đồng > 60%
                 if (point.Score > 0.6) 
                 {
                     memories.Add(point.Payload["content"].StringValue);
