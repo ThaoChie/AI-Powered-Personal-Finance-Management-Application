@@ -9,7 +9,8 @@ services:
     ports:
       - "8080:8080"
     environment:
-      - ConnectionStrings__DefaultConnection=Server=db;Database=FinanceJarDb;User Id=sa;Password=0944138963Pt@;TrustServerCertificate=True;
+      # Connection String đã khớp password bên dưới -> OK
+      - ConnectionStrings__DefaultConnection=Server=db;Database=FinanceJarDb;User=root;Password=0944138963Pt@;
       - GeminiKey=AIzaSyBBMhyMob-NtTRRiGgJLbng7zeWBmSk7OY
       - Jwt__Key=ThisIsASecretKeyForJwtTokenGeneration123!
       - Jwt__Issuer=FinanceJarServer
@@ -18,16 +19,17 @@ services:
       - db
       - qdrant
 
-  # 2. SQL SERVER
+  # 2. MYSQL DATABASE (Đã sửa comment cho đúng)
   db:
-    image: mcr.microsoft.com/mssql/server:2022-latest
+    image: mysql:8.0
+    restart: always
     environment:
-      - ACCEPT_EULA=Y
-      - SA_PASSWORD=0944138963Pt@
+      - MYSQL_ROOT_PASSWORD=0944138963Pt@
+      - MYSQL_DATABASE=FinanceJarDb
     ports:
-      - "1433:1433"
+      - "3306:3306"
     volumes:
-      - sql_data:/var/opt/mssql
+      - mysql_data:/var/lib/mysql  # 👈 Ở đây dùng tên mysql_data
 
   # 3. QDRANT (Vector DB)
   qdrant:
@@ -37,6 +39,7 @@ services:
     volumes:
       - qdrant_data:/qdrant/storage
 
+# 👇 KHAI BÁO VOLUME (Phải khớp với tên bên trên)
 volumes:
-  sql_data:
+  mysql_data:    # 👈 ĐÃ SỬA: Khớp với service db
   qdrant_data:

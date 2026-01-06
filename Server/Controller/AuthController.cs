@@ -27,27 +27,52 @@ namespace FinanceJarApp.Server.Controllers
         [HttpPost("register")]
         public async Task<IActionResult> Register(RegisterDto request)
         {
-            if (await _context.Users.AnyAsync(u => u.Email == request.Email))
+            try 
             {
-                return BadRequest("Email này đã tồn tại.");
+                // 1. Kiểm tra Email trùng
+                if (await _context.Users.AnyAsync(u => u.Email == request.Email))
+                {
+                    return BadRequest("Email này đã tồn tại.");
+                }
+
+                string passwordHash = BCrypt.Net.BCrypt.HashPassword(request.Password);
+
+                // 2. LOGIC "BẤT TỬ": Tự động điền nếu thiếu thông tin
+                // Nếu Username thiếu -> Lấy Email
+                string finalUsername = string.IsNullOrEmpty(request.Username) ? request.Email : request.Username;
+                
+                // Nếu FullName thiếu -> Lấy phần tên trước @ của email (ví dụ: phuongthao)
+                string finalFullName = string.IsNullOrEmpty(request.FullName) 
+                                       ? request.Email.Split('@')[0] 
+                                       : request.FullName;
+
+                var newUser = new User
+                {
+                    Username = finalUsername,
+                    Email = request.Email,
+                    PasswordHash = passwordHash,
+                    FullName = finalFullName, // 👈 Đảm bảo không bao giờ bị null
+                    CreatedAt = DateTime.Now  
+                };
+
+                _context.Users.Add(newUser);
+                
+                // 3. Lưu vào DB
+                await _context.SaveChangesAsync();
+
+                return Ok(new { message = "Đăng ký thành công!" });
             }
-
-            string passwordHash = BCrypt.Net.BCrypt.HashPassword(request.Password);
-
-            var newUser = new User
+            catch (Exception ex)
             {
-                Username = request.Username,
-                Email = request.Email,
-                PasswordHash = passwordHash,
-                FullName = request.Username 
-            };
-
-            _context.Users.Add(newUser);
-            await _context.SaveChangesAsync();
-
-            return Ok(new { message = "Đăng ký thành công!" });
+                // 👇 IN LỖI CHI TIẾT RA MÀN HÌNH ĐEN (TERMINAL)
+                Console.WriteLine("❌ LỖI DATABASE: " + ex.Message);
+                if (ex.InnerException != null)
+                {
+                    Console.WriteLine("❌ CHI TIẾT GỐC RỄ: " + ex.InnerException.Message);
+                }
+                return StatusCode(500, "Lỗi máy chủ: " + ex.Message);
+            }
         }
-
         // --- ĐĂNG NHẬP ---
         [HttpPost("login")]
         public async Task<IActionResult> Login(LoginDto request)
@@ -60,7 +85,6 @@ namespace FinanceJarApp.Server.Controllers
             }
 
             string token = CreateToken(user);
-            // Trả về cả FullName để hiển thị
             return Ok(new { token = token, username = user.Username, fullName = user.FullName, email = user.Email });
         }
 
@@ -84,7 +108,7 @@ namespace FinanceJarApp.Server.Controllers
             return Ok(user);
         }
 
-        // 👇👇👇 1. API CẬP NHẬT THÔNG TIN CÁ NHÂN (MỚI) 👇👇👇
+        // --- CẬP NHẬT THÔNG TIN ---
         [HttpPut("update-profile")]
         [Authorize]
         public async Task<IActionResult> UpdateProfile(UpdateProfileDto request)
@@ -96,14 +120,13 @@ namespace FinanceJarApp.Server.Controllers
             var user = await _context.Users.FindAsync(userId);
             if (user == null) return NotFound();
 
-            // Cập nhật tên
             user.FullName = request.FullName;
             
             await _context.SaveChangesAsync();
             return Ok(new { message = "Cập nhật thành công!", fullName = user.FullName });
         }
 
-        // 👇👇👇 2. API ĐỔI MẬT KHẨU (MỚI) 👇👇👇
+        // --- ĐỔI MẬT KHẨU ---
         [HttpPost("change-password")]
         [Authorize]
         public async Task<IActionResult> ChangePassword(ChangePasswordDto request)
@@ -115,13 +138,11 @@ namespace FinanceJarApp.Server.Controllers
             var user = await _context.Users.FindAsync(userId);
             if (user == null) return NotFound();
 
-            // Kiểm tra mật khẩu cũ
             if (!BCrypt.Net.BCrypt.Verify(request.OldPassword, user.PasswordHash))
             {
                 return BadRequest("Mật khẩu cũ không đúng.");
             }
 
-            // Mã hóa và lưu mật khẩu mới
             user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.NewPassword);
             
             await _context.SaveChangesAsync();
@@ -134,7 +155,7 @@ namespace FinanceJarApp.Server.Controllers
             List<Claim> claims = new List<Claim>
             {
                 new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
-                new Claim(ClaimTypes.Name, user.Username),
+                new Claim(ClaimTypes.Name, user.Username ?? user.Email), // Fallback nếu username null
                 new Claim(ClaimTypes.Email, user.Email)
             };
 
@@ -153,10 +174,12 @@ namespace FinanceJarApp.Server.Controllers
         }
     }
 
-    // --- DTOs ---
+    // --- DTOs (Data Transfer Objects) ---
+    
     public class RegisterDto
     {
-        public string Username { get; set; }
+        public string? FullName { get; set; } // Thêm trường này để nhận Họ Tên từ React
+        public string? Username { get; set; } // Cho phép null (để code tự xử lý)
         public string Email { get; set; }
         public string Password { get; set; }
     }
@@ -167,7 +190,6 @@ namespace FinanceJarApp.Server.Controllers
         public string Password { get; set; }
     }
 
-    // 👇 DTO MỚI CHO CẬP NHẬT
     public class UpdateProfileDto
     {
         public string FullName { get; set; }
