@@ -28,6 +28,11 @@
     <PackageReference Include="Microsoft.ML.TimeSeries" Version="4.0.0" />
 
     <PackageReference Include="Swashbuckle.AspNetCore" Version="6.6.2" />
+
+    <None Update="Data\knowledge.txt">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    
   </ItemGroup>
 
 </Project>
