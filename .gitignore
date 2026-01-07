@@ -9,3 +9,7 @@
 **/dist/
 **/build/
 .DS_Store
+
+**/bin/
+**/obj/
+.DS_Store

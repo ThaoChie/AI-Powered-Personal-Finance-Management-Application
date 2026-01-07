@@ -8,7 +8,7 @@ services:
     ports:
       - "8080:8080"
     environment:
-      - ConnectionStrings__DefaultConnection=Server=db;Database=FinanceJarDb;User=root;Password=0944138963Pt@;
+      #- ConnectionStrings__DefaultConnection=Server=db;Database=FinanceJarDb;User=root;Password=0944138963Pt@;
       - GeminiKey=AIzaSyBHpQh6nRLfJyzcHU72ZKJBvYzKgDffXpI
       - Jwt__Key=ThisIsASecretKeyForJwtTokenGeneration123!
       - Jwt__Issuer=FinanceJarServer
@@ -23,7 +23,7 @@ services:
     image: mysql:9.0
     restart: always
     environment:
-      - MYSQL_ROOT_PASSWORD=0944138963Pt@
+     # - MYSQL_ROOT_PASSWORD=0944138963Pt@
       - MYSQL_DATABASE=FinanceJarDb
     ports:
       - "3306:3306"
