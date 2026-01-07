@@ -2,7 +2,7 @@
 FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
 WORKDIR /app
 
-COPY *.csproj ./
+COPY Server/*.csproj ./
 RUN dotnet restore
 
 COPY . ./
