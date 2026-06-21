@@ -67,7 +67,9 @@ builder.Services.AddAuthentication(options =>
 
 // Đăng ký các Service
 builder.Services.AddHttpClient<GeminiService>(); // Tự động tạo HttpClient
+builder.Services.AddScoped<IGeminiService>(sp => sp.GetRequiredService<GeminiService>());
 builder.Services.AddSingleton<QdrantService>();
+builder.Services.AddHostedService<AICoachingService>(); // 🎯 Background Service: Tạo thử thách AI mỗi tuần
 
 // CORS (Cho phép Frontend gọi vào)
 builder.Services.AddCors(options =>

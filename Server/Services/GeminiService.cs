@@ -7,7 +7,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace FinanceJarApp.Server.Services
 {
-    public class GeminiService
+    public class GeminiService : IGeminiService
     {
         private readonly HttpClient _httpClient;
         private readonly string _apiKey;
@@ -158,7 +158,62 @@ namespace FinanceJarApp.Server.Services
             }
         }
 
-        // --- 3. CHỨC NĂNG ĐỌC HÓA ĐƠN (OCR) ---
+        // --- 3. CHỨC NĂNG TẠO THỬ THÁCH TIẾT KIỆM (AI COACHING) ---
+        public async Task<string> GenerateChallengeAsync(decimal totalExpense)
+        {
+            if (string.IsNullOrEmpty(_apiKey)) return "Hãy thử tiết kiệm 10% chi tiêu tuần này!";
+
+            string modelName = "gemini-flash-latest";
+            string apiUrl = $"https://generativelanguage.googleapis.com/v1beta/models/{modelName}:generateContent?key={_apiKey}";
+
+            var prompt = $"Tổng chi tiêu tuần qua của người dùng là {totalExpense:N0} VND. " +
+                         "Dựa vào mức chi tiêu này, hãy tạo ra 1 thử thách tiết kiệm ngắn gọn, thực tế và khích lệ cho tuần tới " +
+                         "(ví dụ: \"Nấu ăn ở nhà 3 ngày\", \"Cắt giảm café xuống 2 lần/tuần\"). " +
+                         "Trả về dạng JSON thuần (không markdown) gồm 2 trường: " +
+                         "\"title\" (tên thử thách ngắn gọn, tối đa 80 ký tự) và " +
+                         "\"description\" (mô tả chi tiết, lý do và lợi ích, tối đa 200 ký tự). " +
+                         "Chỉ trả về JSON, không giải thích thêm.";
+
+            var requestBody = new
+            {
+                contents = new[] { new { parts = new[] { new { text = prompt } } } },
+                generationConfig = new { temperature = 0.8 }
+            };
+
+            var jsonContent = new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json");
+
+            try
+            {
+                var response = await _httpClient.PostAsync(apiUrl, jsonContent);
+                var responseString = await response.Content.ReadAsStringAsync();
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    Console.WriteLine($"❌ [AICoaching] Gemini Error: {response.StatusCode}");
+                    return "{\"title\":\"Tiết kiệm tuần này!\",\"description\":\"Hãy cố gắng giảm ít nhất 10% chi tiêu so với tuần trước.\"}";
+                }
+
+                using var doc = JsonDocument.Parse(responseString);
+                if (doc.RootElement.TryGetProperty("candidates", out var candidates) && candidates.GetArrayLength() > 0)
+                {
+                    var content = candidates[0].GetProperty("content");
+                    if (content.TryGetProperty("parts", out var parts))
+                    {
+                        var text = parts[0].GetProperty("text").GetString();
+                        text = text?.Replace("```json", "").Replace("```", "").Trim();
+                        return text ?? "{\"title\":\"Tiết kiệm!\",\"description\":\"Hãy thử tiết kiệm thêm tuần này.\"}";
+                    }
+                }
+                return "{\"title\":\"Tiết kiệm!\",\"description\":\"Hãy thử tiết kiệm thêm tuần này.\"}";
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"❌ [AICoaching] Exception: {ex.Message}");
+                return "{\"title\":\"Tiết kiệm!\",\"description\":\"Hãy thử tiết kiệm thêm tuần này.\"}";
+            }
+        }
+
+        // --- 4. CHỨC NĂNG ĐỌC HÓA ĐƠN (OCR) ---
         public async Task<string> AnalyzeImageAsync(Stream imageStream, string mimeType)
         {
             if (string.IsNullOrEmpty(_apiKey)) return "{}";
